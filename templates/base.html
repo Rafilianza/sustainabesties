@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="Understand your rental home's energy options, compare estimated running costs and prepare a thoughtful request to your landlord. For Victorian renters.">
+  <meta name="theme-color" content="#183c34">
+  <title>{% block title %}What Does My Home Need? — A practical guide for Victorian renters{% endblock %}</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="site-header wrap">
+    <a class="brand" href="/" aria-label="What Does My Home Need? Home">
+      <img src="{{ url_for('static', filename='favicon.svg') }}" alt="" width="36" height="36">
+      <span>What does<br><strong>my home need?</strong></span>
+    </a>
+    <nav aria-label="Main navigation">
+      <a href="/methodology" {% if request.endpoint == 'home' %}target="_blank" rel="noopener noreferrer" title="Opens in a new tab so your assessment stays here"{% endif %}>How estimates work</a>
+      <span class="edition">Victoria · renter edition</span>
+    </nav>
+  </header>
+  <main id="main-content" class="wrap">{% block content %}{% endblock %}</main>
+  <footer class="site-footer wrap">
+    <p>Better information. A more considered request.</p>
+    <div><span>An independent competition prototype</span><a href="/methodology#privacy" target="_blank" rel="noopener noreferrer">Your privacy</a><a href="/methodology#sources" target="_blank" rel="noopener noreferrer">Sources</a></div>
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

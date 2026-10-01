@@ -1,0 +1,30 @@
+{
+  "reviewed_on": "2026-10-01",
+  "model_version": "1.0",
+  "defaults": {"electricity_price": 30, "gas_price": 3, "gas_daily_charge": 100},
+  "emissions": {"electricity_kg_per_kwh": 0.78, "gas_kg_per_mj": 0.05153, "year": 2025},
+  "demand": {
+    "heating_kwh_per_m2": [60, 120],
+    "cooking_kwh_per_person": [75, 150],
+    "hot_water_litres_per_person_per_day": [35, 55],
+    "water_temperature_rise_c": 45,
+    "water_heat_capacity_kj_per_litre_c": 4.186,
+    "hot_water_loss_multiplier": 1.15
+  },
+  "efficiency": {
+    "heating": {"gas": 0.75, "electric_resistance": 1, "heat_pump": 3.5},
+    "cooking": {"gas": 0.4, "electric_resistance": 0.74, "induction": 0.9},
+    "hot_water": {"gas": 0.7, "electric_resistance": 0.9, "heat_pump": 2.7}
+  },
+  "sources": [
+    {"id": "emissions", "title": "National Greenhouse Accounts Factors 2025", "publisher": "Australian Government DCCEEW", "url": "https://www.dcceew.gov.au/sites/default/files/documents/national-greenhouse-account-factors-2025.pdf", "reference": "2025, tables 1 and 5", "use": "Victorian electricity generation: 0.78 kg CO₂e/kWh. Direct natural gas combustion: 51.53 kg CO₂e/GJ (0.05153 kg/MJ). Upstream emissions are excluded."},
+    {"id": "heating", "title": "Heating and cooling", "publisher": "Australian Government", "url": "https://www.energy.gov.au/households/heating-and-cooling", "reference": "Reviewed 1 October 2026", "use": "Explains reverse-cycle heating and broad efficiency ranges. Our seasonal COP of 3.5 is a project assumption, not a measured product rating."},
+    {"id": "cooking", "title": "Electrifying apartments guide", "publisher": "City of Yarra / Unlocking Sustainable Strata", "url": "https://www.yarracity.vic.gov.au/sites/default/files/2024-05/www.yarracity.vic.gov.au/-/media/files/ycc/services/take-climate-action/solar-and-energy/uss-electrifying-apartments-guide_web.pdf", "reference": "Guide hosted May 2024, page 27", "use": "Approximate cooktop heat-transfer efficiency: induction 90%, gas 40%. Actual performance varies with cookware and use."},
+    {"id": "hot_water", "title": "Hot water buyers guide", "publisher": "Victorian Government", "url": "https://www.energy.vic.gov.au/victorian-energy-upgrades/products/hot-water-system-discounts/hot-water-buyers-guide", "reference": "Reviewed 1 October 2026", "use": "Heat pumps use 60–75% less electricity than conventional electric hot water. Indicative installed heat-pump costs: $2,500–$7,500 before incentives; obtain a property-specific quote."},
+    {"id": "cooking_cost", "title": "Induction cooktop buyers guide", "publisher": "Victorian Government", "url": "https://www.energy.vic.gov.au/victorian-energy-upgrades/products/induction-cooktop-discounts/induction-cooktop-buyers-guide", "reference": "Reviewed 1 October 2026", "use": "Products cost about $600 to over $6,000. A dedicated circuit may cost $600–$1,200 and gas capping $250–$500. Other building and electrical work can add costs."},
+    {"id": "insulation", "title": "Insulation", "publisher": "Australian Government Your Home", "url": "https://www.yourhome.gov.au/passive-design/insulation", "reference": "Reviewed 1 October 2026", "use": "Supports guidance on insulation, climate, shading and professional assessment. No insulation dollar saving or home R-value is inferred by this tool."},
+    {"id": "veu", "title": "Victorian Energy Upgrades for homes", "publisher": "Victorian Government", "url": "https://www.energy.vic.gov.au/victorian-energy-upgrades/homes", "reference": "Reviewed 1 October 2026", "use": "Accredited providers must confirm eligible products, installation requirements and the actual discount. No rebate is deducted from our estimates."},
+    {"id": "rental_standards", "title": "New minimum energy efficiency standards", "publisher": "Consumer Affairs Victoria", "url": "https://www.consumer.vic.gov.au/resources-and-tools/legislation/public-consultations-and-reviews/new-minimum-energy-efficiency-standards", "reference": "Reviewed 1 October 2026", "use": "New standards are phased in from March 2027. Timing, tenancy circumstances, appliance triggers and exemptions matter; this tool does not determine a property's legal obligations."},
+    {"id": "bills", "title": "Read your energy bill", "publisher": "Victorian Government", "url": "https://www.energy.vic.gov.au/households/help-paying-your-energy-bills/read-your-energy-bill", "reference": "Reviewed 1 October 2026", "use": "Explains usage and supply charges. Our default 30 c/kWh, 3 c/MJ and 100 c/day are editable project illustrations, not current retailer offers or regulated tariffs."}
+  ]
+}

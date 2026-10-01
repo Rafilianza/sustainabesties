@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="introduction" aria-labelledby="intro-title">
+  <div>
+    <p class="eyebrow">A practical starting point for renters</p>
+    <h1 id="intro-title">A home that feels better.<br>A clearer way to ask.</h1>
+    <p class="intro-copy">Find the improvements worth discussing, understand the costs, and put a thoughtful request to your landlord.</p>
+  </div>
+  <div class="intro-note"><span class="section-number">01—03</span><p>Your home.<br>Your options.<br>Your next conversation.</p><span class="small-text">Heating · Cooking · Hot water · Insulation</span></div>
+</section>
+
+<nav class="journey" aria-label="Assessment progress">
+  <ol>
+    <li><button type="button" class="step-button is-active" data-step="home" aria-current="step"><span>01</span> Your home</button></li>
+    <li><button type="button" class="step-button" data-step="results" disabled><span>02</span> Your options</button></li>
+    <li><button type="button" class="step-button" data-step="letter" disabled><span>03</span> Your landlord letter</button></li>
+  </ol>
+</nav>
+<div id="app-message" role="status" aria-live="polite" class="app-message" hidden></div>
+
+<section id="home-step" class="step-panel" aria-labelledby="home-title">
+  <div class="section-heading"><div><p class="eyebrow">Start with what you know</p><h2 id="home-title" tabindex="-1">Tell us about your home.</h2></div><button id="example-button" class="text-button" type="button">Try an example home</button></div>
+  <div class="assessment-layout">
+    <form id="assessment-form" novalidate>
+      <div id="form-errors" class="error-summary" role="alert" hidden></div>
+      <fieldset class="form-section">
+        <legend><span class="field-number">01</span> The basics</legend>
+        <div class="field-grid">
+          <div class="field"><label for="postcode">Victorian postcode</label><input id="postcode" name="postcode" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{4}" maxlength="4" placeholder="e.g. 3056" required aria-describedby="postcode-help"><p class="field-help" id="postcode-help">No street address needed. Estimates use a Victorian reference scenario.</p></div>
+          <div class="field"><label for="dwelling">Type of home</label><select id="dwelling" name="dwelling"><option value="house">House or townhouse</option><option value="apartment">Apartment or unit</option></select></div>
+          <div class="field"><label for="occupants">People living here</label><select id="occupants" name="occupants">{% for number in range(1, 9) %}<option value="{{ number }}" {% if number == 2 %}selected{% endif %}>{{ number }} {{ 'person' if number == 1 else 'people' }}</option>{% endfor %}</select></div>
+          <div class="field"><label for="heated_area">Area you usually heat</label><select id="heated_area" name="heated_area"><option value="30">One room · about 30 m²</option><option value="60" selected>Several rooms · about 60 m²</option><option value="100">Most of a home · about 100 m²</option><option value="150">A large home · about 150 m²</option><option value="unknown">I don’t know</option></select></div>
+        </div>
+      </fieldset>
+      <fieldset class="form-section">
+        <legend><span class="field-number">02</span> What you use today</legend>
+        <p class="section-help">Choose the closest match. An unknown appliance will stay out of the cost estimate.</p>
+        <div class="field-grid">
+          <div class="field"><label for="heating">Main heating</label><select id="heating" name="heating"><option value="unknown">I don’t know</option><option value="gas">Gas heater or gas ducted heating</option><option value="electric_resistance">Plug-in or panel electric heater</option><option value="heat_pump">Reverse-cycle air conditioner</option><option value="none">No heating system</option><option value="other">Wood or another system</option></select></div>
+          <div class="field"><label for="cooling">Summer cooling</label><select id="cooling" name="cooling"><option value="none">No cooling system</option><option value="fan">Fans</option><option value="air_conditioner">Air conditioner</option><option value="evaporative">Evaporative cooling</option><option value="unknown">I don’t know</option></select></div>
+          <div class="field"><label for="cooking">Cooktop</label><select id="cooking" name="cooking"><option value="unknown">I don’t know</option><option value="gas">Gas</option><option value="electric_resistance">Electric coil or ceramic</option><option value="induction">Induction</option><option value="none">No cooktop</option></select></div>
+          <div class="field"><label for="hot_water">Hot water</label><select id="hot_water" name="hot_water"><option value="unknown">I don’t know</option><option value="gas">Individual gas system</option><option value="electric_resistance">Electric storage tank</option><option value="heat_pump">Heat-pump system</option><option value="shared">Shared or building-wide system</option><option value="solar">Solar or solar with gas boosting</option></select></div>
+        </div>
+      </fieldset>
+      <fieldset class="form-section">
+        <legend><span class="field-number">03</span> How your home feels</legend>
+        <div class="field-grid">
+          <div class="field"><label for="insulation">Ceiling insulation</label><select id="insulation" name="insulation"><option value="unknown">I don’t know</option><option value="none">Known to have no insulation</option><option value="poor">Known to be thin or patchy</option><option value="present">Insulation is present</option><option value="not_applicable">Another home is directly above</option></select></div>
+          <div class="field"><label for="comfort">What bothers you most?</label><select id="comfort" name="comfort"><option value="both">Too cold in winter and hot in summer</option><option value="cold">Too cold in winter</option><option value="hot">Too hot in summer</option><option value="comfortable">Generally comfortable</option></select></div>
+        </div>
+        <p class="field-help">Only use what you already know. You don’t need to enter the roof space.</p>
+      </fieldset>
+      <fieldset class="form-section">
+        <legend><span class="field-number">04</span> A few details that affect the estimate</legend>
+        <div class="field-grid">
+          <div class="field"><label for="other_gas">Any other gas appliances?</label><select id="other_gas" name="other_gas"><option value="unknown">I’m not sure</option><option value="yes">Yes, such as a gas oven or fireplace</option><option value="no">No other gas appliances</option></select><p class="field-help">Include appliances outside the three categories above.</p></div>
+          <div class="field"><label for="solar">Rooftop solar or battery</label><select id="solar" name="solar"><option value="no">Neither</option><option value="yes">Solar and/or a battery</option><option value="unknown">I don’t know</option></select></div>
+        </div>
+        <details class="tariff-details"><summary>Use the prices from your energy bill <span>Optional</span></summary><p class="section-help">Otherwise, we use illustrative flat rates. These are editable assumptions, not a retailer quote.</p><div class="field-grid tariff-grid">
+          <div class="field"><label for="electricity_price">Electricity · cents/kWh</label><input id="electricity_price" name="electricity_price" type="number" min="1" max="200" step="0.01" value="30"></div>
+          <div class="field"><label for="gas_price">Gas · cents/MJ</label><input id="gas_price" name="gas_price" type="number" min="0.1" max="50" step="0.01" value="3"></div>
+          <div class="field"><label for="gas_daily_charge">Gas supply · cents/day</label><input id="gas_daily_charge" name="gas_daily_charge" type="number" min="0" max="1000" step="0.01" value="100"></div>
+        </div></details>
+      </fieldset>
+      <div class="form-actions"><p>Estimates to guide a conversation.<br>Every assumption is available to review.</p><button id="assess-button" type="submit" class="button primary">See my options</button></div>
+    </form>
+    <aside class="home-aside">
+      <figure class="home-photo"><img src="{{ url_for('static', filename='fitzroy-homes.jpg') }}" alt="A row of terrace homes on Greeves Street in Fitzroy, Melbourne" width="800" height="600"><figcaption>Fitzroy, Melbourne. <a href="https://commons.wikimedia.org/wiki/File:Fitzroy_Greeves_Street_houses.jpg" target="_blank" rel="noopener noreferrer">Photo: Redtree21 · CC0</a></figcaption></figure>
+      <div class="aside-note"><p class="eyebrow">A little clarity helps</p><h3>You don’t need to know everything.</h3><p>Start with the details you have. We’ll make it clear what can be estimated and what needs a closer look.</p></div>
+      <div class="aside-facts"><p><strong>For you</strong><br>Understand running costs and practical improvements.</p><p><strong>For your landlord</strong><br>A specific request, with the information needed to consider it.</p><p class="privacy-note">No account. No saved assessment.<br>Your answers stay in this session.</p></div>
+    </aside>
+  </div>
+</section>
+
+<section id="results-step" class="step-panel" hidden aria-labelledby="results-title">
+  <div class="section-heading"><div><p class="eyebrow">Your options · For the renter</p><h1 id="results-title" tabindex="-1">Make a considered change.</h1><p id="home-summary" class="muted"></p></div><button class="text-button" type="button" data-go-home>Edit home details</button></div>
+  <div id="results-content"></div>
+  <div class="form-actions results-actions"><p>Select the improvements you’d like<br>to discuss with your landlord.</p><button id="prepare-letter" class="button primary" type="button">Prepare my request</button></div>
+</section>
+
+<section id="letter-step" class="step-panel" hidden aria-labelledby="letter-title">
+  <div class="section-heading"><div><p class="eyebrow">Your next conversation · For the landlord</p><h1 id="letter-title" tabindex="-1">A thoughtful request, in your words.</h1><p class="muted">Review the draft, replace the placeholders and make it your own.</p></div><button class="text-button" type="button" id="back-to-options">Back to options</button></div>
+  <div class="letter-layout">
+    <div>
+      <div class="letter-toolbar"><span id="letter-mode" class="eyebrow">Your draft</span><button type="button" id="regenerate-letter" class="text-button">Generate again</button></div>
+      <label class="sr-only" for="letter-text">Editable landlord letter</label><textarea id="letter-text" class="letter-document" spellcheck="true"></textarea>
+      <div class="letter-actions"><button type="button" id="copy-letter" class="button primary">Copy letter</button><button type="button" id="download-letter" class="button secondary">Download text</button><button type="button" id="print-letter" class="button secondary">Print / save PDF</button></div>
+      <p id="letter-status" class="field-help" role="status" aria-live="polite"></p>
+    </div>
+    <aside class="letter-aside"><p class="eyebrow">Before you send</p><h2>A request to consider.<br>A place to start.</h2><ul><li>Replace names and address placeholders.</li><li>Check the selected work matches what you want.</li><li>Keep the estimates and their limitations together.</li><li>Ask for a quote or assessment before committing to work.</li></ul><div id="letter-selection"></div><p class="privacy-note">AI drafting shares the selected appliance scenario with OpenAI. Names and street addresses are not requested. The app does not send your letter.</p></aside>
+  </div>
+</section>
+<div id="print-document" class="print-document" aria-hidden="true"></div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='app.js') }}" defer></script>{% endblock %}
