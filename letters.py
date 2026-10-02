@@ -3,10 +3,61 @@
 import json
 import os
 import re
+from urllib.parse import urlsplit
 
 from openai import OpenAI, OpenAIError
 
 from calculations import UPGRADES
+
+
+# These providers expose endpoints understood by the existing OpenAI SDK.
+# Qwen's preset is the Alibaba Cloud Singapore endpoint.
+PROVIDER_URLS = {
+    "openai": "https://api.openai.com/v1",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "deepseek": "https://api.deepseek.com/v1",
+    "qwen": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    "custom": "",
+}
+
+
+def get_ai_settings():
+    """Read one provider's settings without borrowing another provider's key."""
+    provider = os.environ.get("AI_PROVIDER", "openai").strip().lower()
+    if provider not in PROVIDER_URLS:
+        raise ValueError("Set AI_PROVIDER to openai, gemini, deepseek, qwen or custom.")
+
+    # Generic settings take priority; existing OPENAI_* settings still work.
+    prefix = provider.upper()
+    api_key = os.environ.get("AI_API_KEY", "").strip()
+    if not api_key:
+        api_key = os.environ.get(f"{prefix}_API_KEY", "").strip()
+    model = os.environ.get("AI_MODEL", "").strip()
+    if not model:
+        model = os.environ.get(f"{prefix}_MODEL", "").strip()
+    if not model and provider == "openai":
+        model = "gpt-4o-mini"
+
+    base_url = os.environ.get("AI_BASE_URL", "").strip() or PROVIDER_URLS[provider]
+    try:
+        endpoint = urlsplit(base_url)
+    except ValueError:
+        raise ValueError("AI_BASE_URL must be a valid API URL.") from None
+    local_http = endpoint.scheme == "http" and endpoint.hostname in ("localhost", "127.0.0.1", "::1")
+    if not endpoint.hostname or (endpoint.scheme != "https" and not local_http):
+        raise ValueError("Set AI_BASE_URL to an HTTPS API URL (HTTP is allowed for localhost).")
+    if endpoint.username or endpoint.password or endpoint.query or endpoint.fragment:
+        raise ValueError("AI_BASE_URL must not contain credentials, query parameters or a fragment.")
+
+    json_mode = os.environ.get("AI_JSON_MODE", "true").strip().lower()
+    if json_mode not in ("true", "false"):
+        raise ValueError("Set AI_JSON_MODE to true or false.")
+    if api_key and not model:
+        raise ValueError("Set AI_MODEL to the exact model ID from your provider.")
+    return {
+        "provider": provider, "api_key": api_key, "model": model,
+        "base_url": base_url, "json_mode": json_mode == "true",
+    }
 
 
 def money_range(values):
@@ -49,29 +100,59 @@ def draft_prose(requests):
         "assessment or quote? I understand that suitability, access and costs need "
         "to be confirmed before any work is agreed. Thank you for considering this request."
     )
-    if not os.environ.get("OPENAI_API_KEY"):
+    try:
+        settings = get_ai_settings()
+    except ValueError as error:
+        return opening, closing, "template", f"{error} Your personalised template is ready."
+    if not settings["api_key"]:
         return opening, closing, "template", "A personalised template is ready. AI drafting can be enabled with a server API key."
 
     try:
-        client = OpenAI(timeout=25, max_retries=0)
-        response = client.responses.create(
-            model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
-            store=False,
-            max_output_tokens=450,
-            instructions=(
-                "Write two short Australian-English paragraphs for a polite renter-to-landlord request. "
-                "Return a JSON object with exactly opening and closing text fields. "
-                "The opening introduces a discussion about comfort and energy performance. "
-                "The closing asks for a discussion and professional quote or assessment. "
-                "Use only the provided request topics. Do not add numbers, prices, sources, rebates, "
-                "laws, deadlines, health diagnoses, tenancy history, promises of savings, property "
-                "values, or obligations. Do not include names, addresses, greetings or signatures. "
-                "The verified evidence and exact requests will be inserted separately."
-            ),
-            input=json.dumps({"request_topics": requests}),
-            text={"format": {"type": "json_object"}},
+        client = OpenAI(
+            api_key=settings["api_key"], base_url=settings["base_url"],
+            timeout=30, max_retries=0,
         )
-        prose = json.loads(response.output_text)
+        instructions = (
+            "Write two short Australian-English paragraphs for a polite renter-to-landlord request. "
+            "Return a JSON object with exactly opening and closing text fields. "
+            "The opening introduces a discussion about comfort and energy performance. "
+            "The closing asks for a discussion and professional quote or assessment. "
+            "Use only the provided request topics. Do not add numbers, prices, sources, rebates, "
+            "laws, deadlines, health diagnoses, tenancy history, promises of savings, property "
+            "values, or obligations. Do not include names, addresses, greetings or signatures. "
+            "The verified evidence and exact requests will be inserted separately."
+        )
+        request_topics = json.dumps({"request_topics": requests})
+        if settings["provider"] == "openai":
+            # Preserve the Responses API and disabled response storage for OpenAI.
+            response = client.responses.create(
+                model=settings["model"], store=False, max_output_tokens=2048,
+                instructions=instructions, input=request_topics,
+                text={"format": {"type": "json_object" if settings["json_mode"] else "text"}},
+            )
+            response_text = response.output_text
+        else:
+            # Gemini, DeepSeek, Qwen and custom endpoints use Chat Completions.
+            options = {}
+            if settings["json_mode"]:
+                options["response_format"] = {"type": "json_object"}
+            response = client.chat.completions.create(
+                model=settings["model"], max_tokens=2048,
+                messages=[
+                    {"role": "system", "content": instructions},
+                    {"role": "user", "content": request_topics},
+                ],
+                **options,
+            )
+            response_text = response.choices[0].message.content
+
+        # Some compatible providers wrap JSON in a Markdown code block.
+        if not isinstance(response_text, str):
+            raise ValueError("Missing drafting text")
+        response_text = response_text.strip()
+        if response_text.startswith("```") and response_text.endswith("```"):
+            response_text = "\n".join(response_text.splitlines()[1:-1])
+        prose = json.loads(response_text)
         if not isinstance(prose, dict):
             raise ValueError("Unexpected drafting response")
         for key in ["opening", "closing"]:
@@ -83,8 +164,8 @@ def draft_prose(requests):
                 raise ValueError("Unexpected claim in drafting response")
             if re.search(r"\b(legal|obligation|rebate|guarantee|deadline|diagnosis|value|must)\b", paragraph, re.IGNORECASE):
                 raise ValueError("Unsupported claim in drafting response")
-        return prose["opening"], prose["closing"], "ai", "AI-assisted wording with calculated figures inserted separately. Please review before use."
-    except (OpenAIError, ValueError, TypeError):
+        return prose["opening"], prose["closing"], "ai", f"AI-assisted wording via {settings['provider']}, with calculated figures inserted separately. Please review before use."
+    except (OpenAIError, ValueError, TypeError, IndexError, AttributeError):
         # Do not return provider errors: they can contain request or account data.
         return opening, closing, "template", "AI drafting is unavailable. Your personalised template is ready and can be edited."
 

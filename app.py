@@ -1,11 +1,16 @@
 """A small local website for Victorian renters. Run with: python app.py."""
 
+from pathlib import Path
 from urllib.parse import urlsplit
 
+from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 
 from calculations import REFERENCE, assess_home, validate_payload
 from letters import create_letter
+
+# Load local settings without replacing variables already set in the terminal.
+load_dotenv(Path(__file__).parent / ".env", override=False)
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024

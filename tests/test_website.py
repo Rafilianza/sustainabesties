@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from app import app
 from calculations import REFERENCE, assess_home, validate_payload
-from letters import create_letter
+from letters import create_letter, get_ai_settings
 
 
 EXAMPLE = {
@@ -220,6 +220,126 @@ class DraftingTests(unittest.TestCase):
         draft = create_letter(example_report())
         self.assertEqual(draft["mode"], "template")
         self.assertNotIn("test-key-never-sent", str(draft))
+
+
+class ProviderTests(unittest.TestCase):
+    def setUp(self):
+        self.prose = json.dumps({
+            "opening": "I would like to discuss the practical improvements listed below.",
+            "closing": "Could we arrange a suitable time to discuss a professional quote?",
+        })
+
+    @patch("letters.OpenAI")
+    def test_compatible_providers_route_to_the_right_endpoint(self, mock_client):
+        endpoints = {
+            "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
+            "deepseek": "https://api.deepseek.com/v1",
+            "qwen": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            "custom": "https://example.com/v1",
+        }
+        for provider, endpoint in endpoints.items():
+            with self.subTest(provider=provider):
+                mock_client.reset_mock()
+                mock_client.return_value.chat.completions.create.return_value = SimpleNamespace(
+                    choices=[SimpleNamespace(message=SimpleNamespace(content=self.prose))]
+                )
+                environment = {
+                    "AI_PROVIDER": provider, "AI_API_KEY": "selected-provider-key",
+                    "AI_MODEL": "chosen-model", "OPENAI_API_KEY": "wrong-provider-key",
+                }
+                if provider == "custom":
+                    environment["AI_BASE_URL"] = endpoint
+                with patch.dict(os.environ, environment, clear=True):
+                    draft = create_letter(example_report())
+                self.assertEqual(draft["mode"], "ai")
+                self.assertIn("Current running costs $518–$1,037/year", draft["letter"])
+                self.assertEqual(mock_client.call_args.kwargs["base_url"], endpoint)
+                self.assertEqual(mock_client.call_args.kwargs["api_key"], "selected-provider-key")
+                arguments = mock_client.return_value.chat.completions.create.call_args.kwargs
+                self.assertEqual(arguments["model"], "chosen-model")
+                self.assertEqual(arguments["response_format"], {"type": "json_object"})
+                self.assertNotIn("store", arguments)
+                self.assertNotIn("3056", arguments["messages"][1]["content"])
+                self.assertNotIn("selected-provider-key", str(draft))
+                mock_client.return_value.responses.create.assert_not_called()
+
+    @patch.dict(os.environ, {"AI_PROVIDER": "gemini", "OPENAI_API_KEY": "wrong-key"}, clear=True)
+    @patch("letters.OpenAI")
+    def test_missing_provider_key_never_borrows_openai_key(self, mock_client):
+        self.assertEqual(create_letter(example_report())["mode"], "template")
+        mock_client.assert_not_called()
+
+    def test_generic_settings_and_provider_specific_fallbacks(self):
+        for provider in ["openai", "gemini", "deepseek", "qwen"]:
+            with self.subTest(provider=provider):
+                environment = {
+                    "AI_PROVIDER": provider, "AI_API_KEY": "", "AI_MODEL": "",
+                    f"{provider.upper()}_API_KEY": "provider-key",
+                    f"{provider.upper()}_MODEL": "provider-model",
+                }
+                with patch.dict(os.environ, environment, clear=True):
+                    self.assertEqual(get_ai_settings()["api_key"], "provider-key")
+                    self.assertEqual(get_ai_settings()["model"], "provider-model")
+                    with patch.dict(os.environ, {"AI_API_KEY": "generic-key", "AI_MODEL": "generic-model"}):
+                        self.assertEqual(get_ai_settings()["api_key"], "generic-key")
+                        self.assertEqual(get_ai_settings()["model"], "generic-model")
+
+    @patch.dict(os.environ, {"AI_PROVIDER": "qwen", "AI_BASE_URL": "https://dashscope.aliyuncs.com/compatible-mode/v1"}, clear=True)
+    def test_region_endpoint_override(self):
+        self.assertEqual(get_ai_settings()["base_url"], "https://dashscope.aliyuncs.com/compatible-mode/v1")
+
+    @patch("letters.OpenAI")
+    def test_invalid_settings_fall_back_without_a_request(self, mock_client):
+        cases = [
+            {"AI_PROVIDER": "typo"},
+            {"AI_PROVIDER": "custom"},
+            {"AI_PROVIDER": "gemini", "AI_API_KEY": "test-key"},
+            {"AI_BASE_URL": "http://remote.example/v1"},
+            {"AI_BASE_URL": "https://user:secret@example.com/v1"},
+            {"AI_BASE_URL": "https://example.com/v1?key=secret"},
+            {"AI_BASE_URL": "https://[invalid"},
+            {"AI_JSON_MODE": "invalid"},
+        ]
+        for environment in cases:
+            with self.subTest(environment=environment):
+                with patch.dict(os.environ, environment, clear=True):
+                    draft = create_letter(example_report())
+                self.assertEqual(draft["mode"], "template")
+                self.assertNotIn("secret", draft["message"])
+        mock_client.assert_not_called()
+
+    @patch.dict(os.environ, {"AI_PROVIDER": "custom", "AI_BASE_URL": "http://localhost:11434/v1", "AI_API_KEY": "local", "AI_MODEL": "local-model", "AI_JSON_MODE": "false"}, clear=True)
+    @patch("letters.OpenAI")
+    def test_custom_endpoint_without_json_mode_accepts_fenced_json(self, mock_client):
+        mock_client.return_value.chat.completions.create.return_value = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=f"```json\n{self.prose}\n```"))]
+        )
+        self.assertEqual(create_letter(example_report())["mode"], "ai")
+        arguments = mock_client.return_value.chat.completions.create.call_args.kwargs
+        self.assertNotIn("response_format", arguments)
+
+    @patch.dict(os.environ, {"AI_PROVIDER": "gemini", "AI_API_KEY": "test-key", "AI_MODEL": "gemini-3.1-flash-lite"}, clear=True)
+    @patch("letters.OpenAI")
+    def test_empty_refused_or_malformed_chat_responses_use_template(self, mock_client):
+        for response in [
+            SimpleNamespace(choices=[]),
+            SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=None))]),
+            SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="not JSON"))]),
+            SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"opening": "Pay $500 now", "closing": "Please consider it."}'))]),
+        ]:
+            mock_client.return_value.chat.completions.create.return_value = response
+            self.assertEqual(create_letter(example_report())["mode"], "template")
+
+    @patch.dict(os.environ, {"AI_PROVIDER": "deepseek", "AI_API_KEY": "private-test-key", "AI_MODEL": "chosen-model"}, clear=True)
+    @patch("letters.OpenAI")
+    def test_compatible_api_failure_does_not_expose_provider_error(self, mock_client):
+        from openai import APIConnectionError
+        mock_client.return_value.chat.completions.create.side_effect = APIConnectionError(
+            request=None, message="Error containing private-test-key"
+        )
+        draft = create_letter(example_report())
+        self.assertEqual(draft["mode"], "template")
+        self.assertNotIn("private-test-key", str(draft))
 
 
 if __name__ == "__main__":

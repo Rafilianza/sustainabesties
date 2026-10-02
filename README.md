@@ -17,26 +17,62 @@ Open **http://127.0.0.1:8000**. Press **Control+C** in the terminal to stop the 
 
 For the competition walkthrough, select **Try an example home**, then **See my options**. Change selected upgrades and prepare a landlord request. The renter view focuses on running costs and comfort; the landlord request identifies the work, indicative installation costs and sources.
 
-## Enable AI drafting
+## Choose an AI provider and model
 
-The calculator and personalised template work without an API key. AI drafting is optional and uses the OpenAI API, which needs its own account access and billing; a ChatGPT subscription is not an API credential.
+AI is optional. Without a key, the calculator and editable template letters still work.
+The app supports OpenAI, Gemini (Google AI Studio), DeepSeek, Qwen (Alibaba Cloud Model Studio), and other **OpenAI-compatible Chat Completions** endpoints. It uses the existing OpenAI Python SDK for the compatible providers; selecting Gemini sends the request to Google, not OpenAI.
 
-1. Follow the [official OpenAI setup guide](https://developers.openai.com/api/docs/quickstart) to create a project API key and configure your account. Check your project's spending settings before use.
-2. In the same terminal that will run Flask, enter the key privately. The following **zsh** commands avoid putting the value in shell history or printing it:
+1. Open `.env` in this folder. After cloning, copy `.env.example` to `.env` first.
+2. Set the provider, its API key and the exact model ID together. For Gemini:
 
-```sh
-read -s 'OPENAI_API_KEY?Paste your OpenAI API key: '
-export OPENAI_API_KEY
-printf '\n'
-export OPENAI_MODEL='gpt-4o-mini'
-python app.py
+```dotenv
+AI_PROVIDER=gemini
+AI_API_KEY=your_gemini_api_key
+AI_MODEL=gemini-3.1-flash-lite
+AI_BASE_URL=
+AI_JSON_MODE=true
 ```
 
-If the server is already running, stop it first. Never put the key in JavaScript, commit it, or paste it into chat. `.env.example` documents the variable names; the app deliberately does **not** automatically load `.env` files.
+For OpenAI, use `AI_PROVIDER=openai` and, for example, `AI_MODEL=gpt-4o-mini` with an OpenAI API key. For DeepSeek or Qwen, select that provider and enter a model ID available in its API console. These are API keys, not chat website subscriptions or passwords. Model access and billing depend on the selected provider.
 
-3. Generate a letter. The label will say **AI-assisted draft** when the call succeeds. If the key is missing, inaccessible or invalid, or the request times out, the app returns an editable personalised template.
+| AI_PROVIDER | Default API base URL | API used |
+| --- | --- | --- |
+| `openai` | `https://api.openai.com/v1` | Responses |
+| `gemini` | `https://generativelanguage.googleapis.com/v1beta/openai/` | Chat Completions |
+| `deepseek` | `https://api.deepseek.com/v1` | Chat Completions |
+| `qwen` | `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` | Chat Completions |
+| `custom` | Set `AI_BASE_URL` yourself | Chat Completions |
 
-Only fixed, selected improvement topics are sent to OpenAI. The API writes the opening and closing; the app inserts every numerical comparison and source itself. Names, street addresses, postcodes, tariffs and the edited letter are not sent. Responses use `store=False`; the provider's separate data-handling policies still apply. The app never sends the letter to a landlord.
+Qwen's preset is Singapore. Set `AI_BASE_URL` to the endpoint matching your Alibaba Cloud account region/workspace when different. Gemini's preset is for the Gemini Developer API; it does not implement Vertex AI authentication.
+
+For another compatible provider:
+
+```dotenv
+AI_PROVIDER=custom
+AI_API_KEY=your_provider_api_key
+AI_MODEL=your_exact_model_id
+AI_BASE_URL=https://your-provider.example/v1
+AI_JSON_MODE=true
+```
+
+Use the **base URL**, not the full `/chat/completions` URL. The custom server must accept bearer-key authentication and the OpenAI Chat Completions request/response format, including system/user messages and `max_tokens`. APIs using a different native format need a separate adapter. HTTP is accepted for localhost servers; for a local server without authentication, use a non-secret placeholder such as `AI_API_KEY=local`.
+
+Set `AI_JSON_MODE=false` only if your endpoint rejects `response_format`. The prompt still requests JSON and the app validates it. Requests have a 30-second timeout, no automatic retries and a 2,048-token output limit. Refused, truncated or invalid responses fall back to the template. Reasoning-heavy models may need a different token limit in `letters.py`; a short text-drafting model is the simplest fit.
+
+3. Save `.env`, stop Flask with **Control+C**, and restart with `python app.py`.
+4. Prepare a letter. Its status identifies the provider when AI succeeds. A missing key, configuration error or provider failure gives an editable template instead. No request is sent to an alternative provider automatically.
+
+### Existing keys and setting precedence
+
+Your existing private `.env` values are preserved. Old `OPENAI_API_KEY` and `OPENAI_MODEL` settings still work with `AI_PROVIDER=openai` (also the default if unset). Equivalent `GEMINI_API_KEY` / `GEMINI_MODEL`, `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL`, and `QWEN_API_KEY` / `QWEN_MODEL` are supported for their selected providers.
+
+Non-empty `AI_API_KEY` and `AI_MODEL` take priority over provider-specific variables. Keep them blank if you want to store separate provider-specific keys/models and switch with just `AI_PROVIDER`. A Gemini selection never falls back to an `OPENAI_API_KEY`. Non-OpenAI providers require an explicit model ID; OpenAI defaults to `gpt-4o-mini` if no model is set. Variables already exported in your terminal take priority over `.env` values; restart in a fresh terminal or unset old exports if needed.
+
+`.env` is ignored by Git. Never put a key in browser code or paste it into chat. Only fixed, selected improvement topics go to the configured provider. Names, street addresses, postcodes, tariffs and the edited letter are not sent. AI writes the opening and closing; the app inserts calculations and sources locally. OpenAI requests use `store=False`; other providers have their own storage controls and policies. The app never sends the letter to a landlord.
+
+The provider selection and API calls are in `letters.py`, in `get_ai_settings()` and `draft_prose()`. No additional dependencies were needed for the provider support.
+
+Official integration references: [OpenAI Responses](https://developers.openai.com/api/reference/cli/resources/responses/methods/create), [Gemini compatibility](https://ai.google.dev/gemini-api/docs/openai), [Gemini model](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite), [DeepSeek Chat Completions](https://api-docs.deepseek.com/api/create-chat-completion/), [Qwen regional endpoints](https://help.aliyun.com/en/model-studio/base-url).
 
 ## Understand the code
 
@@ -71,7 +107,7 @@ source .venv/bin/activate
 python -m unittest discover -s tests -v
 ```
 
-All 25 automated checks pass. They mock the AI service and do not spend API credits. Browser checks cover the example flow, selection updates, postcode errors, keyboard operation, letter editing/copying and mobile reflow without horizontal overflow. Live AI access must be confirmed after you configure a valid key.
+The automated checks mock the AI services and do not spend API credits. They cover provider routing, key isolation, configuration precedence, custom endpoints, malformed responses and fallback, alongside the calculation and endpoint tests. Browser checks cover the example flow, selection updates, postcode errors, keyboard operation, letter editing/copying and mobile reflow without horizontal overflow. Live AI access must be confirmed after you configure a valid key.
 
 The in-app browser did not expose working download/print dialogs or page zoom controls during testing. The edited print text was verified, but the final exported files and actual 200% browser zoom remain unverified. Open the local address in Safari or Chrome to check **Download text**, **Print / save PDF**, and 200% zoom. The print stylesheet shows only the edited letter.
 
